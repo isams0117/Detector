@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="style.css" />
+    <script src="./ezuikit.js" defer></script>
     <script src="script.js" defer></script>
     <title>Semáforo Inteligente en Chihuahua</title>
     <link
@@ -36,11 +37,24 @@
           </div>
         </div>
         <div class="video-wrapper">
+            <!-- Selector con los Serial Numbers -->
+          <select id="camaraSelect" onchange="cambiarCamara()">
+            <option value="GN4073777">Intersección 1 (GN4073777)</option>
+            <option value="GN4073774">Intersección 2 (GN4073774)</option>
+            <option value="GN4073783">Intersección 3 (GN4073783)</option>
+            <option value="GN4073789">Intersección 4 (GN4073789)</option>
+            <option value="GN4073785">Intersección 5 (GN4073785)</option>
+            <option value="GN4073769">Intersección 6 (GN4073769)</option>
+            <option value="GN4073778">Intersección 7 (GN4073778)</option>
+            <option value="GN4073771">Intersección 8 (GN4073771)</option>
+            <option value="GN4073796">Intersección 9 (GN4073796)</option>
+            <option value="GN4073784">Intersección 10 (GN4073784)</option>
+            </select>
           <div class="emergency-overlay" id="emergencyOverlay">
             <span class="emergency-icon">🚨</span>
             EMERGENCIA — SEMÁFORO EN VERDE
           </div>
-          <video id="video" autoplay playsinline muted></video>
+          <div id="video-container"></div>
           <canvas id="canvas"></canvas>
         </div>
         <div class="camera-controls">

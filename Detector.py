@@ -4,6 +4,7 @@ Hackathon Ciudades del Futuro | Chihuahua
 
 Instalar:
     pip install flask inference-sdk
+    pip install mediapipe
 
 Correr:
     python Detector.py
@@ -12,6 +13,11 @@ Correr:
 from flask import Flask, request, jsonify, send_from_directory
 from datetime import datetime
 import json, os, base64, time
+import mediapipe as mp # Librería de Clasificación de Imágenes
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+import numpy as np
+import cv2
 
 # ── Roboflow ──────────────────────────────────────────────────────────────────
 try:
@@ -29,9 +35,26 @@ ROBOFLOW_MODEL_ID = "ambulance-detection-funys/1"
 CONFIANZA_MINIMA  = 0.25   
 CLASES_EMERGENCIA = {"ambulance", "Ambulance", "AMBULANCE"}
 LOG_FILE          = "eventos.json"
+MODEL_PATH        = os.path.join(os.path.dirname(__file__), "2.tflite")
 
 # ══════════════════════════════════════════════════════════════════════════════
 app = Flask(__name__)
+
+# Inicializar detector MediaPipe (modelo TFLite de deteccion)
+BaseOptions = python.BaseOptions
+ObjectDetector = vision.ObjectDetector
+ObjectDetectorOptions = vision.ObjectDetectorOptions
+VisionRunningMode = vision.RunningMode
+
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(f"Modelo no encontrado: {MODEL_PATH}")
+
+detector_options = ObjectDetectorOptions(
+    base_options=BaseOptions(model_asset_path=MODEL_PATH),
+    running_mode=VisionRunningMode.IMAGE,
+    max_results=5,
+)
+detector = ObjectDetector.create_from_options(detector_options)
 
 # Cliente Roboflow (singleton)
 _client = None
@@ -65,13 +88,11 @@ def guardar_evento(clase: str, confianza: float):
         json.dump(historial, f, indent=2, ensure_ascii=False)
     return evento
 
-
 def leer_eventos():
     if not os.path.exists(LOG_FILE):
         return []
     with open(LOG_FILE) as f:
         return json.load(f)
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # RUTAS API
@@ -79,64 +100,51 @@ def leer_eventos():
 
 @app.route("/detectar", methods=["POST"])
 def detectar():
-    """
-    Recibe un frame en base64, lo manda a Roboflow y regresa las detecciones.
-    Body JSON: { "image": "<base64>" }
-    """
-    data   = request.get_json()
+    data = request.get_json()
     img_b64 = data.get("image", "")
+    camara_id = data.get("camara", "Desconocida")
 
-    # Quitar encabezado data:image/...;base64, si viene del browser
-    if "," in img_b64:
-        img_b64 = img_b64.split(",")[1]
+    # 1. Decodificar imagen
+    img_bytes = base64.b64decode(img_b64)
+    np_arr = np.frombuffer(img_bytes, np.uint8)
+    img_cv2 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-    client = get_client()
+    # 2. Procesar con MediaPipe
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, 
+                        data=cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB))
+    
+    # 'detector' debe estar definido globalmente al inicio del archivo
+    resultado = detector.detect(mp_image)
+    
+    predicciones = []
+    hay_emergencia = False
 
-    # ── Sin API key: modo simulación ──────────────────────────────────────
-    if client is None:
-        return jsonify({"predicciones": [], "simulacion": True})
-
-    # ── Inferencia real ───────────────────────────────────────────────────
-    try:
-        resultado = client.infer(img_b64, model_id=ROBOFLOW_MODEL_ID)
-        predicciones = []
-        hay_emergencia = False
-
-        for pred in resultado.get("predictions", []):
-            conf  = float(pred["confidence"])
-            if conf < CONFIANZA_MINIMA:
-                continue
-            clase = pred["class"]
-            es_emergencia = clase in CLASES_EMERGENCIA
-
-            predicciones.append({
-                "clase":        clase,
-                "confianza":    round(conf, 3),
-                "x":            pred["x"],
-                "y":            pred["y"],
-                "width":        pred["width"],
-                "height":       pred["height"],
-                "emergencia":   es_emergencia,
-            })
-            if es_emergencia:
-                hay_emergencia = True
-
-        # Guardar log si hay emergencia
-        evento = None
-        if hay_emergencia:
-            p = next(p for p in predicciones if p["emergencia"])
-            evento = guardar_evento(p["clase"], p["confianza"])
-
-        return jsonify({
-            "predicciones":   predicciones,
-            "hay_emergencia": hay_emergencia,
-            "evento":         evento,
-            "simulacion":     False,
+    # 3. Formatear resultados para que tu frontend los entienda
+    for detection in resultado.detections:
+        category = detection.categories[0]
+        # Ajusta "Ambulance" según las etiquetas de tu modelo 2.tflite
+        es_emergencia = category.category_name.lower() in ["ambulance", "ambulancia"]
+        
+        bbox = detection.bounding_box
+        predicciones.append({
+            "clase": category.category_name,
+            "confianza": category.score,
+            "x": bbox.origin_x + (bbox.width / 2),
+            "y": bbox.origin_y + (bbox.height / 2),
+            "width": bbox.width,
+            "height": bbox.height,
+            "emergencia": es_emergencia
         })
+        if es_emergencia: hay_emergencia = True
 
-    except Exception as e:
-        return jsonify({"error": str(e), "predicciones": []}), 500
+    if hay_emergencia:
+        guardar_evento(f"Ambulancia en {camara_id}", 0.9)
 
+    return jsonify({
+        "predicciones": predicciones,
+        "hay_emergencia": hay_emergencia,
+        "simulacion": False
+    })
 
 @app.route("/simular", methods=["POST"])
 def simular():
@@ -163,6 +171,11 @@ def eventos():
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
+
+
+@app.route("/<path:asset_path>")
+def assets(asset_path):
+    return send_from_directory(".", asset_path)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

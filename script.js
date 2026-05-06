@@ -37,67 +37,91 @@ const statFrames = document.getElementById("statFrames");
 const statConf = document.getElementById("statConfianza");
 const statUptime = document.getElementById("statUptime");
 
-// ══════════════════════════════════════════════════════════════════
-// CÁMARA
-// ══════════════════════════════════════════════════════════════════
-btnStart.addEventListener("click", async () => {
-  if (state.camaraActiva) return;
+const TOKEN = "at.ajnrs4a10uoujxk0e0ahf48tdzgxczmg-3ns8pe40td-09g4lla-qfylev7sm";
+let player = null;
+
+// FUNCIÓN PARA CAMBIAR DE CÁMARA EN HIKCONNECT
+// FUNCIÓN PARA CAMBIAR DE CÁMARA EN HIKCONNECT
+async function cambiarCamara() {
+  const sn = document.getElementById("camaraSelect").value;
+  // 1. URL corregida con el formato exacto que pediste
+  const urlLive = `ezopen://12345abc@open.ezviz.com/${sn}/1.hd.live`;
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 1280, height: 720 },
+    // 2. Destruir el reproductor anterior para evitar conflictos de streaming
+    if (player) {
+      player.destroy();
+      player = null;
+    }
+
+    // 3. Crear nueva instancia con los parámetros correctos
+    player = new EZUIKit.EZUIKitPlayer({
+      id: "video-container",
+      accessToken: TOKEN,
+      url: urlLive,
+      template: "pcLive", // Template correcto para envivo
+      width: 1280,
+      height: 500,
+      audio: false,
+      env: {
+        domain: "https://iusopen.ezvizlife.com" // Dominio de transmisión obligatorio
+      },
+      handleSuccess: () => {
+        console.log("EZUIKit reproduciendo correctamente");
+      },
+      handleError: (err) => {
+        console.error("EZUIKit error:", err);
+      }
     });
-    video.srcObject = stream;
-    await video.play();
 
     state.camaraActiva = true;
     state.startTime = Date.now();
-    btnStart.disabled = true;
-    btnStart.textContent = "✅ Cámara Activa";
+    setStatus("SISTEMA HIK-ONLINE", true);
     btnSim.disabled = false;
 
-    setStatus("ACTIVO", true);
-
-    // Sincronizar canvas con video
-    video.addEventListener("loadedmetadata", () => {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-    });
-
-    // Inferencia cada 2 segundos
-    state.intervalInfer = setInterval(enviarFrame, 2000);
-  } catch (e) {
-    alert("No se pudo acceder a la cámara: " + e.message);
+  } catch (error) {
+    console.error("Error al reproducir cámara:", error);
+    setStatus("ERROR DE CÁMARA", false);
   }
-});
+}
 
-// ══════════════════════════════════════════════════════════════════
-// ENVIAR FRAME AL BACKEND
-// ══════════════════════════════════════════════════════════════════
+// FUNCIÓN PARA ENVIAR FRAMES AL SERVIDOR CADA 2 SEGUNDOS
 async function enviarFrame() {
-  if (!state.camaraActiva || video.readyState < 2) return;
+  // Buscamos el elemento video que EZUIKit crea dinámicamente
+  const videoInterno = document.querySelector("#video-container video");
+  if (!videoInterno || videoInterno.readyState < 2) return;
 
-  // Capturar frame en canvas temporal
   const tmp = document.createElement("canvas");
-  tmp.width = video.videoWidth || 640;
-  tmp.height = video.videoHeight || 480;
-  tmp.getContext("2d").drawImage(video, 0, 0, tmp.width, tmp.height);
-  const b64 = tmp.toDataURL("image/jpeg", 0.8);
+  tmp.width = videoInterno.videoWidth;
+  tmp.height = videoInterno.videoHeight;
+  tmp.getContext("2d").drawImage(videoInterno, 0, 0);
 
-  state.frameCount++;
-  statFrames.textContent = state.frameCount;
+  const b64 = tmp.toDataURL("image/jpeg", 0.8).split(",")[1];
 
   try {
     const res = await fetch("/detectar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: b64 }),
+      body: JSON.stringify({ image: b64, camara: document.getElementById("camaraSelect").value }),
     });
     const data = await res.json();
+
+    // Usamos tu función procesarDetecciones original para dibujar los cuadros
     procesarDetecciones(data, tmp.width, tmp.height);
   } catch (e) {
-    console.error("Error en inferencia:", e);
+    console.error("Error en comunicación con Flask:", e);
   }
 }
+
+btnStart.addEventListener("click", async () => {
+  await cambiarCamara();
+  btnSim.disabled = false;
+});
+
+// NO iniciar automáticamente la cámara al cargar
+// cambiarCamara();
+
+setInterval(enviarFrame, 2000);
 
 // ══════════════════════════════════════════════════════════════════
 // BOTÓN SIMULAR
