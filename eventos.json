@@ -1,0 +1,26 @@
+[
+  {
+    "timestamp": "2026-05-06T05:11:09.479251",
+    "tipo_vehiculo": "Ambulance (simulación)",
+    "confianza": 0.97,
+    "accion": "SEMAFORO_VERDE_ACTIVADO"
+  },
+  {
+    "timestamp": "2026-05-06T05:11:23.378526",
+    "tipo_vehiculo": "Ambulance (simulación)",
+    "confianza": 0.97,
+    "accion": "SEMAFORO_VERDE_ACTIVADO"
+  },
+  {
+    "timestamp": "2026-05-06T05:21:21.991066",
+    "tipo_vehiculo": "Ambulance (simulación)",
+    "confianza": 0.97,
+    "accion": "SEMAFORO_VERDE_ACTIVADO"
+  },
+  {
+    "timestamp": "2026-05-06T05:27:32.017934",
+    "tipo_vehiculo": "Ambulance (simulación)",
+    "confianza": 0.97,
+    "accion": "SEMAFORO_VERDE_ACTIVADO"
+  }
+]

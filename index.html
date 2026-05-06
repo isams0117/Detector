@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semáforo Inteligente — Chihuahua</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #080c10;
+    --surface:   #0d1520;
+    --border:    #1a2d45;
+    --accent:    #00d4ff;
+    --green:     #00ff88;
+    --red:       #ff3355;
+    --yellow:    #ffcc00;
+    --text:      #cde4f5;
+    --muted:     #4a6580;
+    --danger-bg: rgba(255,51,85,0.12);
+    --safe-bg:   rgba(0,255,136,0.10);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid scanline overlay ─────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,212,255,0.015) 2px, rgba(0,212,255,0.015) 4px);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Header ────────────────────────────────────────────────── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,21,32,0.9);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 10;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .logo-icon {
+    width: 38px; height: 38px;
+    background: linear-gradient(135deg, var(--accent), #0077aa);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .logo-text h1 {
+    font-size: 1.1rem; font-weight: 700; letter-spacing: 2px;
+    color: var(--accent); text-transform: uppercase;
+  }
+  .logo-text p {
+    font-size: 0.7rem; color: var(--muted); letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem; color: var(--muted);
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse-dot 1s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ── Main layout ───────────────────────────────────────────── */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: auto 1fr;
+    gap: 20px;
+    padding: 24px 32px;
+    max-width: 1400px; margin: 0 auto;
+    position: relative; z-index: 1;
+  }
+
+  /* ── Camera panel ──────────────────────────────────────────── */
+  .camera-panel {
+    grid-row: 1 / 3;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-title {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .rec-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem; color: var(--red);
+  }
+  .rec-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: pulse-dot 1s infinite; }
+
+  .video-wrapper {
+    position: relative;
+    background: #000;
+  }
+
+  #video {
+    width: 100%; display: block;
+    max-height: 500px; object-fit: cover;
+  }
+
+  #canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  /* Alerta de emergencia sobre el video */
+  .emergency-overlay {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, rgba(255,51,85,0.9), rgba(180,0,30,0.9));
+    display: flex; align-items: center; gap: 12px;
+    font-size: 1.1rem; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+    z-index: 5;
+  }
+  .emergency-overlay.visible { transform: translateY(0); }
+  .emergency-icon { font-size: 1.4rem; animation: shake 0.3s infinite; }
+  @keyframes shake { 0%,100%{transform:rotate(-5deg)} 50%{transform:rotate(5deg)} }
+
+  .camera-controls {
+    display: flex; gap: 10px; padding: 14px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn {
+    flex: 1; padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.85rem; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.05); }
+  .btn.btn-danger { border-color: var(--red); color: var(--red); }
+  .btn.btn-danger:hover { background: rgba(255,51,85,0.1); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Semáforo panel ────────────────────────────────────────── */
+  .semaforo-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+  }
+
+  .semaforo-caja {
+    width: 100px;
+    background: #0a0e14;
+    border: 2px solid #1a2535;
+    border-radius: 16px;
+    padding: 16px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .luz {
+    width: 52px; height: 52px; border-radius: 50%;
+    transition: all 0.4s ease;
+    position: relative;
+  }
+  .luz::after {
+    content: ''; position: absolute; inset: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+  }
+
+  .luz-rojo    { background: #2a0a0a; border: 2px solid #3d1010; }
+  .luz-amarillo { background: #1a1500; border: 2px solid #2a2000; }
+  .luz-verde   { background: #001a0a; border: 2px solid #002a12; }
+
+  .luz-rojo.on {
+    background: var(--red);
+    border-color: #ff6680;
+    box-shadow: 0 0 30px var(--red), 0 0 60px rgba(255,51,85,0.4);
+  }
+  .luz-amarillo.on {
+    background: var(--yellow);
+    border-color: #ffdd44;
+    box-shadow: 0 0 30px var(--yellow), 0 0 60px rgba(255,204,0,0.4);
+  }
+  .luz-verde.on {
+    background: var(--green);
+    border-color: #44ffaa;
+    box-shadow: 0 0 30px var(--green), 0 0 60px rgba(0,255,136,0.4);
+  }
+
+  .semaforo-estado {
+    text-align: center;
+  }
+  .semaforo-estado .label {
+    font-size: 0.65rem; letter-spacing: 3px; text-transform: uppercase; color: var(--muted);
+  }
+  .semaforo-estado .valor {
+    font-size: 1.4rem; font-weight: 700; letter-spacing: 2px; margin-top: 4px;
+    transition: color 0.3s;
+  }
+  .semaforo-estado .countdown {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem; color: var(--muted); margin-top: 4px;
+    min-height: 20px;
+  }
+
+  /* ── Stats panel ───────────────────────────────────────────── */
+  .stats-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin-top: 14px;
+  }
+
+  .stat-card {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .stat-card .stat-label {
+    font-size: 0.62rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+  }
+  .stat-card .stat-value {
+    font-size: 1.8rem; font-weight: 700; margin-top: 4px;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+  }
+  .stat-card .stat-sub {
+    font-size: 0.65rem; color: var(--muted); margin-top: 2px;
+  }
+
+  /* ── Log panel ─────────────────────────────────────────────── */
+  .log-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    grid-column: 1 / 3;
+  }
+
+  .log-list {
+    margin-top: 14px;
+    display: flex; flex-direction: column; gap: 8px;
+    max-height: 200px; overflow-y: auto;
+  }
+  .log-list::-webkit-scrollbar { width: 4px; }
+  .log-list::-webkit-scrollbar-track { background: transparent; }
+  .log-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .log-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    animation: slide-in 0.3s ease;
+  }
+  .log-item.emergencia { border-color: rgba(255,51,85,0.4); background: var(--danger-bg); }
+  @keyframes slide-in { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+
+  .log-time { color: var(--muted); white-space: nowrap; }
+  .log-clase { color: var(--accent); font-weight: bold; flex: 1; }
+  .log-accion { color: var(--green); font-size: 0.65rem; }
+  .log-conf { color: var(--yellow); }
+
+  .log-empty {
+    text-align: center; padding: 30px;
+    color: var(--muted); font-size: 0.8rem; letter-spacing: 1px;
+  }
+
+  /* ── Responsive ────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .camera-panel { grid-row: auto; }
+    .log-panel { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🚦</div>
+    <div class="logo-text">
+      <h1>Semáforo Inteligente</h1>
+      <p>Hackathon Ciudades del Futuro · Chihuahua 2025</p>
+    </div>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">INICIANDO</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Cámara ── -->
+  <div class="camera-panel">
+    <div class="panel-header">
+      <span class="panel-title">Cámara en Vivo</span>
+      <div class="rec-badge"><div class="rec-dot"></div> EN VIVO</div>
+    </div>
+    <div class="video-wrapper">
+      <div class="emergency-overlay" id="emergencyOverlay">
+        <span class="emergency-icon">🚨</span>
+        EMERGENCIA — SEMÁFORO EN VERDE
+      </div>
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+    </div>
+    <div class="camera-controls">
+      <button class="btn" id="btnStart">▶ Iniciar Cámara</button>
+      <button class="btn btn-danger" id="btnSimular" disabled>🚑 Simular Ambulancia</button>
+    </div>
+  </div>
+
+  <!-- ── Semáforo ── -->
+  <div class="semaforo-panel">
+    <div class="panel-title">Estado del Semáforo</div>
+    <div class="semaforo-caja">
+      <div class="luz luz-rojo on"  id="luzRojo"></div>
+      <div class="luz luz-amarillo" id="luzAmarillo"></div>
+      <div class="luz luz-verde"    id="luzVerde"></div>
+    </div>
+    <div class="semaforo-estado">
+      <div class="label">Estado actual</div>
+      <div class="valor" id="estadoValor" style="color:var(--red)">NORMAL</div>
+      <div class="countdown" id="countdown"></div>
+    </div>
+  </div>
+
+  <!-- ── Stats ── -->
+  <div class="stats-panel">
+    <div class="panel-title">Estadísticas de Sesión</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Emergencias</div>
+        <div class="stat-value" id="statEmergencias">0</div>
+        <div class="stat-sub">detectadas hoy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Frames</div>
+        <div class="stat-value" id="statFrames">0</div>
+        <div class="stat-sub">analizados</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Confianza</div>
+        <div class="stat-value" id="statConfianza">—</div>
+        <div class="stat-sub">última detección</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Uptime</div>
+        <div class="stat-value" id="statUptime">0s</div>
+        <div class="stat-sub">sistema activo</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Log ── -->
+  <div class="log-panel">
+    <div class="panel-header" style="padding:0 0 0 0; border:none;">
+      <span class="panel-title">Registro de Eventos</span>
+      <span style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;">BASE DE DATOS LOCAL</span>
+    </div>
+    <div class="log-list" id="logList">
+      <div class="log-empty">Sin eventos registrados aún...</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════════════════════════════
+const state = {
+  camaraActiva:   false,
+  enEmergencia:   false,
+  emergenciaHasta: 0,       // timestamp en ms
+  emergenciaDuracion: 7000, // 7 segundos
+  frameCount:     0,
+  emergencias:    0,
+  startTime:      null,
+  intervalInfer:  null,
+  intervalUI:     null,
+};
+
+// ══════════════════════════════════════════════════════════════════
+// ELEMENTOS DOM
+// ══════════════════════════════════════════════════════════════════
+const video     = document.getElementById("video");
+const canvas    = document.getElementById("canvas");
+const ctx       = canvas.getContext("2d");
+const btnStart  = document.getElementById("btnStart");
+const btnSim    = document.getElementById("btnSimular");
+const overlay   = document.getElementById("emergencyOverlay");
+const luzRojo   = document.getElementById("luzRojo");
+const luzAmar   = document.getElementById("luzAmarillo");
+const luzVerde  = document.getElementById("luzVerde");
+const estadoVal = document.getElementById("estadoValor");
+const countdown = document.getElementById("countdown");
+const statusDot = document.getElementById("statusDot");
+const statusTxt = document.getElementById("statusText");
+const logList   = document.getElementById("logList");
+
+// Stats
+const statEmerg  = document.getElementById("statEmergencias");
+const statFrames = document.getElementById("statFrames");
+const statConf   = document.getElementById("statConfianza");
+const statUptime = document.getElementById("statUptime");
+
+// ══════════════════════════════════════════════════════════════════
+// CÁMARA
+// ══════════════════════════════════════════════════════════════════
+btnStart.addEventListener("click", async () => {
+  if (state.camaraActiva) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width:1280, height:720 } });
+    video.srcObject = stream;
+    await video.play();
+
+    state.camaraActiva = true;
+    state.startTime    = Date.now();
+    btnStart.disabled  = true;
+    btnStart.textContent = "✅ Cámara Activa";
+    btnSim.disabled    = false;
+
+    setStatus("ACTIVO", true);
+
+    // Sincronizar canvas con video
+    video.addEventListener("loadedmetadata", () => {
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+    });
+
+    // Inferencia cada 2 segundos
+    state.intervalInfer = setInterval(enviarFrame, 2000);
+
+  } catch(e) {
+    alert("No se pudo acceder a la cámara: " + e.message);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// ENVIAR FRAME AL BACKEND
+// ══════════════════════════════════════════════════════════════════
+async function enviarFrame() {
+  if (!state.camaraActiva || video.readyState < 2) return;
+
+  // Capturar frame en canvas temporal
+  const tmp = document.createElement("canvas");
+  tmp.width  = video.videoWidth  || 640;
+  tmp.height = video.videoHeight || 480;
+  tmp.getContext("2d").drawImage(video, 0, 0, tmp.width, tmp.height);
+  const b64 = tmp.toDataURL("image/jpeg", 0.8);
+
+  state.frameCount++;
+  statFrames.textContent = state.frameCount;
+
+  try {
+    const res  = await fetch("/detectar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: b64 }),
+    });
+    const data = await res.json();
+    procesarDetecciones(data, tmp.width, tmp.height);
+  } catch(e) {
+    console.error("Error en inferencia:", e);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BOTÓN SIMULAR
+// ══════════════════════════════════════════════════════════════════
+btnSim.addEventListener("click", async () => {
+  btnSim.disabled = true;
+  setTimeout(() => btnSim.disabled = false, 8000);
+
+  const res  = await fetch("/simular", { method: "POST" });
+  const data = await res.json();
+  procesarDetecciones(data, canvas.width || 640, canvas.height || 480);
+});
+
+// ══════════════════════════════════════════════════════════════════
+// PROCESAR RESPUESTA
+// ══════════════════════════════════════════════════════════════════
+function procesarDetecciones(data, w, h) {
+  const preds = data.predicciones || [];
+
+  // Dibujar bounding boxes
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const p of preds) {
+    const x1 = p.x - p.width / 2;
+    const y1 = p.y - p.height / 2;
+
+    ctx.strokeStyle = p.emergencia ? "#ff3355" : "#00d4ff";
+    ctx.lineWidth   = p.emergencia ? 3 : 2;
+    ctx.strokeRect(x1, y1, p.width, p.height);
+
+    // Etiqueta
+    const label = `${p.clase} ${(p.confianza * 100).toFixed(0)}%`;
+    ctx.fillStyle = p.emergencia ? "#ff3355" : "#00d4ff";
+    ctx.fillRect(x1, y1 - 26, ctx.measureText(label).width + 12, 26);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px Rajdhani, sans-serif";
+    ctx.fillText(label, x1 + 6, y1 - 8);
+
+    if (p.emergencia) {
+      statConf.textContent = (p.confianza * 100).toFixed(0) + "%";
+    }
+  }
+
+  // Activar emergencia
+  if (data.hay_emergencia) {
+    activarEmergencia();
+    if (data.evento) agregarLog(data.evento);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SEMÁFORO
+// ══════════════════════════════════════════════════════════════════
+function activarEmergencia() {
+  if (state.enEmergencia) return; // ya activo
+  state.enEmergencia    = true;
+  state.emergenciaHasta = Date.now() + state.emergenciaDuracion;
+  state.emergencias++;
+  statEmerg.textContent = state.emergencias;
+
+  // Luces
+  luzRojo.classList.remove("on");
+  luzVerde.classList.add("on");
+  overlay.classList.add("visible");
+  estadoVal.style.color = "var(--green)";
+  estadoVal.textContent  = "EMERGENCIA";
+}
+
+function desactivarEmergencia() {
+  state.enEmergencia = false;
+  luzVerde.classList.remove("on");
+  luzRojo.classList.add("on");
+  overlay.classList.remove("visible");
+  estadoVal.style.color  = "var(--red)";
+  estadoVal.textContent   = "NORMAL";
+  countdown.textContent   = "";
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LOOP DE UI (cada 100ms)
+// ══════════════════════════════════════════════════════════════════
+function actualizarUI() {
+  // Countdown semáforo
+  if (state.enEmergencia) {
+    const restante = Math.max(0, state.emergenciaHasta - Date.now());
+    countdown.textContent = `Vuelve a rojo en ${(restante / 1000).toFixed(1)}s`;
+    if (restante <= 0) desactivarEmergencia();
+  }
+
+  // Uptime
+  if (state.startTime) {
+    const secs = Math.floor((Date.now() - state.startTime) / 1000);
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    statUptime.textContent = m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LOG
+// ══════════════════════════════════════════════════════════════════
+function agregarLog(evento) {
+  // Quitar placeholder
+  const empty = logList.querySelector(".log-empty");
+  if (empty) empty.remove();
+
+  const hora = new Date(evento.timestamp).toLocaleTimeString("es-MX");
+  const item = document.createElement("div");
+  item.className = "log-item emergencia";
+  item.innerHTML = `
+    <span class="log-time">${hora}</span>
+    <span class="log-clase">🚑 ${evento.tipo_vehiculo}</span>
+    <span class="log-conf">${((evento.confianza || 0) * 100).toFixed(0)}%</span>
+    <span class="log-accion">SEMÁFORO VERDE ✓</span>
+  `;
+  logList.prepend(item);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STATUS PILL
+// ══════════════════════════════════════════════════════════════════
+function setStatus(txt, active) {
+  statusTxt.textContent = txt;
+  statusDot.className   = "status-dot" + (active ? " active" : "");
+}
+
+// Iniciar el loop de UI inmediatamente (no depende de la cámara)
+state.intervalUI = setInterval(actualizarUI, 100);
+
+// Cargar eventos previos al inicio
+fetch("/eventos").then(r => r.json()).then(evs => {
+  evs.slice(-5).forEach(agregarLog);
+});
+
+// Exponer procesarDetecciones globalmente para pruebas desde consola
+window.simularDesdeConsola = async () => {
+  const res  = await fetch("/simular", { method: "POST" });
+  const data = await res.json();
+  procesarDetecciones(data, 640, 480);
+};
+</script>
+</body>
+</html>
