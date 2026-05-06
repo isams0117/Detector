@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Demo Video - HikConnect Teams</title>
+    <link rel="icon" href="https://www.syscom.mx/favico/syscom_favico.png">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            padding: 20px;
+        }
+        .btn-container {
+            margin-top: 15px;
+        }
+        #video-container {
+            background-color: black;
+            max-width: 100%;
+            height: 600px;
+        }
+        textarea {
+            width: 100%;
+            resize: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="alert alert-info" role="alert">
+            <strong>Nota:</strong> Esta página de demostración es solo un ejemplo de código y debe ser desplegada en un servidor web para funcionar correctamente.
+        </div>
+
+        <h3 style="text-align: center;">Ejemplos de reproducción de video desde HikConnect Teams</h3><br>
+
+        <div class="mb-3">
+            <label for="url" class="form-label"><b>Url para video en vivo/grabación</b> <small>( /api/hccgw/video/v1/live/address/get )</small></label>
+            <input type="text" id="url" class="form-control" rows="2" placeholder="Ejemplo: ezopen://12345abc@open.ezviz.com/Q29763163/1.hd.live">
+        </div>
+        
+        <div class="mb-3">
+            <label for="accessToken" class="form-label"><b>Token para streaming</b> <small>( /api/hccgw/platform/v1/streamtoken/get )</small></label>
+            <input type="text" id="accessToken" class="form-control" placeholder="Ejemplo: at.4xka5hw705y1o6kh2z3j3w5mc9tdcvo3-8adepgfg7s-0srnq8u-02qfmqjvw">
+        </div>
+
+        <div class="mb-3">
+            <label for="streamAreaDomain" class="form-label"><b>Dominio del área de transmisión</b><small>( /api/hccgw/platform/v1/streamtoken/get )</small></label>
+            <input type="text" id="streamAreaDomain" class="form-control" placeholder="Ejemplo: https://iusopen.ezvizlife.com">
+        </div>
+
+        <div class="alert alert-warning" role="alert">
+            <strong>Importante:</strong> Si la reproducción falla, el dispositivo puede estar encriptado. Verifique el código del dispositivo e intente nuevamente.
+        </div>
+
+        <div style="text-align: center !important;">
+            <div id="video-container" class="rounded mb-3"></div>
+        </div>
+
+        <div class="btn-container">
+            <div class="row mb-2">
+                <div class="col d-grid gap-2 d-md-flex justify-content-md-center">
+                    <button id="init" class="btn btn-primary" onclick="init()">Iniciar</button>
+                    <button id="play" class="btn btn-success" disabled onclick="play()">Reproducir</button>
+                    <button id="stop" class="btn btn-danger" disabled onclick="stop()">Detener</button>
+                    <button id="destroy" class="btn btn-danger" onclick="destroy()">Destruir</button>
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col d-grid gap-2 d-md-flex justify-content-md-center">
+                    <button id="capturePicture" class="btn btn-info" disabled onclick="capturePicture()">Capturar imagen</button>
+                    <button id="openSound" class="btn btn-dark" disabled onclick="openSound()">Activar sonido</button>
+                    <button id="closeSound" class="btn btn-dark" disabled onclick="closeSound()">Desactivar sonido</button>
+                    <button id="startSave" class="btn btn-warning" disabled onclick="startSave()">Iniciar grabación</button>
+                    <button id="stopSave" class="btn btn-warning" disabled onclick="stopSave()">Detener grabación</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col d-grid gap-2 d-md-flex justify-content-md-center">
+                    <button id="startTalk" class="btn btn-primary" disabled onclick="ezopenStartTalk()">Iniciar conversación</button>
+                    <button id="stopTalk" class="btn btn-primary" disabled onclick="ezopenStopTalk()">Detener conversación</button>
+                    <button id="fullScreen" class="btn btn-secondary" disabled onclick="fullScreen()">Pantalla completa</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="./ezuikit.js"></script>
+    <script src="./js/jquery.min.js"></script>
+    <script>
+        var player;
+        var template = '';
+        
+        function init() {
+            if (player) {
+                player.destroy();
+            }
+
+            var url = $('#url').val().trim();
+            var accessToken = $('#accessToken').val().trim();
+            var streamAreaDomain = $('#streamAreaDomain').val().trim();
+            template = url.includes('.rec') ? 'pcRec' : 'pcLive';
+            
+            player = new EZUIKit.EZUIKitPlayer({
+                id: 'video-container',
+                accessToken: accessToken,
+                url: url,
+                template,
+                plugin: ['talk'],
+                width: 900,
+                height: 600,
+                env: { domain: streamAreaDomain }
+            });
+
+            $('.btn-container button').not('#init').prop('disabled', false);
+        }
+
+        function play() {
+            var url = $('#url').val().trim();
+            template = url.includes('.rec') ? 'pcRec' : 'pcLive';
+            player.changePlayUrl({ type: template === 'pcLive' ? 'live' : 'rec', url: url });
+            player.play();
+        }
+
+        function stop() { player.stop(); }
+        function getOSDTime() { player.getOSDTime(); }
+        function capturePicture() { player.capturePicture(); }
+        function openSound() { player.openSound(); }
+        function closeSound() { player.closeSound(); }
+        function startSave() { player.startSave(`${new Date().getTime()}`); }
+        function stopSave() { player.stopSave(); }
+        function ezopenStartTalk() { player.startTalk(); }
+        function ezopenStopTalk() { player.stopTalk(); }
+        function fullScreen() { player.fullScreen(); }
+        function destroy() {
+            if (player) {
+                player.destroy();
+                player = null;
+            }
+            $('.btn-container button').not('#init').prop('disabled', true);
+        }
+    </script>
+</body>
+</html>
