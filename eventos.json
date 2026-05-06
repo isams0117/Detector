@@ -22,5 +22,11 @@
     "tipo_vehiculo": "Ambulance (simulación)",
     "confianza": 0.97,
     "accion": "SEMAFORO_VERDE_ACTIVADO"
+  },
+  {
+    "timestamp": "2026-05-06T15:22:31.860550",
+    "tipo_vehiculo": "Ambulance (simulación)",
+    "confianza": 0.97,
+    "accion": "SEMAFORO_VERDE_ACTIVADO"
   }
 ]
