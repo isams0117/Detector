@@ -176,4 +176,4 @@ if __name__ == "__main__":
     print(f"  Modelo:   {ROBOFLOW_MODEL_ID}")
     print(f"  URL:      http://localhost:5000")
     print("=" * 55 + "\n")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False)git
