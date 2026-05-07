@@ -40,22 +40,6 @@ MODEL_PATH        = os.path.join(os.path.dirname(__file__), "2.tflite")
 # ══════════════════════════════════════════════════════════════════════════════
 app = Flask(__name__)
 
-# Inicializar detector MediaPipe (modelo TFLite de deteccion)
-BaseOptions = python.BaseOptions
-ObjectDetector = vision.ObjectDetector
-ObjectDetectorOptions = vision.ObjectDetectorOptions
-VisionRunningMode = vision.RunningMode
-
-if not os.path.exists(MODEL_PATH):
-    raise FileNotFoundError(f"Modelo no encontrado: {MODEL_PATH}")
-
-detector_options = ObjectDetectorOptions(
-    base_options=BaseOptions(model_asset_path=MODEL_PATH),
-    running_mode=VisionRunningMode.IMAGE,
-    max_results=5,
-)
-detector = ObjectDetector.create_from_options(detector_options)
-
 # Cliente Roboflow (singleton)
 _client = None
 def get_client():
@@ -109,30 +93,31 @@ def detectar():
     np_arr = np.frombuffer(img_bytes, np.uint8)
     img_cv2 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-    # 2. Procesar con MediaPipe
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, 
-                        data=cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB))
+    # 2. Procesar con Roboflow
+    client = get_client()
+    if not client:
+        return jsonify({"error": "Roboflow SDK no disponible"}), 500
     
-    # 'detector' debe estar definido globalmente al inicio del archivo
-    resultado = detector.detect(mp_image)
+    resultado = client.infer(img_cv2, model_id=ROBOFLOW_MODEL_ID)
     
     predicciones = []
     hay_emergencia = False
 
-    # 3. Formatear resultados para que tu frontend los entienda
-    for detection in resultado.detections:
-        category = detection.categories[0]
-        # Ajusta "Ambulance" según las etiquetas de tu modelo 2.tflite
-        es_emergencia = category.category_name.lower() in ["ambulance", "ambulancia"]
+    # 3. Formatear resultados
+    for pred in resultado.get("predictions", []):
+        clase = pred["class"]
+        confianza = pred["confidence"]
+        if confianza < CONFIANZA_MINIMA:
+            continue
+        es_emergencia = clase.lower() in CLASES_EMERGENCIA
         
-        bbox = detection.bounding_box
         predicciones.append({
-            "clase": category.category_name,
-            "confianza": category.score,
-            "x": bbox.origin_x + (bbox.width / 2),
-            "y": bbox.origin_y + (bbox.height / 2),
-            "width": bbox.width,
-            "height": bbox.height,
+            "clase": clase,
+            "confianza": confianza,
+            "x": pred["x"],
+            "y": pred["y"],
+            "width": pred["width"],
+            "height": pred["height"],
             "emergencia": es_emergencia
         })
         if es_emergencia: hay_emergencia = True

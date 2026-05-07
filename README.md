@@ -2,7 +2,7 @@
 
 ## Descripción
 
-`Detector` es una aplicación web en Python que detecta ambulancias en imágenes usando la API de Roboflow. Está diseñada para un prototipo de semáforo inteligente que puede reaccionar a emergencias y registrar los eventos detectados.
+`Detector` es una aplicación web en Python que detecta ambulancias en imágenes usando la API de Roboflow. Está diseñada como prototipo de semáforo inteligente que puede reaccionar a emergencias y registrar eventos detectados.
 
 ## Características
 
@@ -15,34 +15,76 @@
 ## Requisitos
 
 - Python 3.11 o superior
-- Paquetes:
+- Paquetes Python:
   - `flask`
   - `inference-sdk`
+  - `mediapipe`
+  - `numpy`
+  - `opencv-python`
+- Dependencias del sistema (especialmente para OpenCV / MediaPipe):
+  - `libgl1-mesa-dev` o `libgl1-mesa-glx`
+  - `libglib2.0-0`
+  - `libsm6`
+  - `libxext6`
+  - `libxrender-dev`
+  - `libgomp1`
 
-## Instalación
+## Instalación local
 
 1. Clona el repositorio o descarga los archivos.
-2. Crea un entorno virtual (recomendado):
+2. Abre una terminal en la carpeta del proyecto.
+3. Crea y activa un entorno virtual:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Instala las dependencias:
+4. Instala dependencias Python:
 
 ```bash
-pip install flask inference-sdk
+pip install flask inference-sdk mediapipe numpy opencv-python
+```
+
+5. Si usas Linux, instala las dependencias del sistema necesarias:
+
+```bash
+sudo apt update
+sudo apt install -y libgl1-mesa-dev libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+```
+
+## Instalación en Codespaces
+
+En Codespaces o en otros entornos basados en Ubuntu, sigue estos pasos:
+
+1. Abre el terminal integrado.
+2. Instala los paquetes del sistema:
+
+```bash
+sudo apt update
+sudo apt install -y libgl1-mesa-dev libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+```
+
+3. Crea y activa un entorno virtual:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+4. Instala las dependencias Python:
+
+```bash
+pip install flask inference-sdk mediapipe numpy opencv-python
 ```
 
 ## Configuración
 
 La app utiliza la variable de entorno `ROBOFLOW_API_KEY` para la inferencia real con Roboflow.
 
-- Si no se configura `ROBOFLOW_API_KEY`, la aplicación opera en modo simulación.
-- La ruta del modelo está definida en `Detector.py` como `ambulance-detection-funys/1`.
+- Si no se configura `ROBOFLOW_API_KEY`, la aplicación operará en modo simulación.
 
-Ejemplo de exportación de variable de entorno:
+Ejemplo:
 
 ```bash
 export ROBOFLOW_API_KEY="tu_api_key_aqui"
@@ -56,7 +98,7 @@ Ejecuta el servidor:
 python Detector.py
 ```
 
-El servidor quedará disponible en:
+Abre tu navegador en:
 
 - `http://localhost:5000`
 
@@ -76,5 +118,5 @@ El servidor quedará disponible en:
 ## Notas
 
 - El proyecto está diseñado como prototipo para demostración y pruebas.
-- Si deseas usar Roboflow en producción, cambia la clave y valida la latencia de la inferencia.
-- `index.html` es la interfaz web que consume las APIs del servidor.
+- Para usar la cámara local, usa la URL del frontend que apunte a tu host local o a la dirección `http://169.254.18.91/...` según tu configuración.
+- Si deseas usar Roboflow en producción, cambia la clave y valida la latencia de inferencia.
